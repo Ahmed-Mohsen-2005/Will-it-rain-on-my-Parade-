@@ -16,13 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Weather Forecast dashboard",
   description: "Modern Next.js scaffold optimized for AI-powered development Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
+  keywords: ["Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
+  authors: [{ name: "Nasa space apps team" }],
   openGraph: {
     title: "Weather Forecast dashboard",
     description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
     type: "website",
   },
   twitter: {
@@ -39,6 +37,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/nasa.png" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
