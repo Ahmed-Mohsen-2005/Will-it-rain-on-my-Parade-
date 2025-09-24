@@ -1,5 +1,5 @@
 'use client'
-
+import Link from "next/link";
 import { useState, useCallback, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,12 @@ export default function Home() {
   const [userAlerts, setUserAlerts] = useState<any[]>([])
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false)
+  
+  // Advanced features state
+  const [aiPrediction, setAiPrediction] = useState<any>(null)
+  const [satelliteImagery, setSatelliteImagery] = useState<any>(null)
+  const [weatherPatterns, setWeatherPatterns] = useState<any>(null)
+  const [isAdvancedLoading, setIsAdvancedLoading] = useState(false)
   
   // Real-time notifications state
   const [notifications, setNotifications] = useState<any[]>([])
@@ -82,17 +88,25 @@ export default function Home() {
   }, [location, debouncedLocationSearch])
 
   const handleLocationSelect = (location: any) => {
+    console.log('Location selected:', location)
     setSelectedLocation(location)
     setLocation(location.name)
     setLocationSuggestions([])
   }
 
   const handleSearch = async () => {
-    if (!selectedLocation || !selectedDate) return
+    console.log('handleSearch called', { selectedLocation, selectedDate })
+    if (!selectedLocation || !selectedDate) {
+      console.log('Missing required fields:', { selectedLocation: !!selectedLocation, selectedDate: !!selectedDate })
+      return
+    }
     
     setIsLoading(true)
+    setIsAdvancedLoading(true)
     try {
-      const response = await fetch('/api/weather', {
+      console.log('Making API request to /api/weather')
+      // Fetch basic weather data
+      const weatherResponse = await fetch('/api/weather', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -104,13 +118,74 @@ export default function Home() {
         }),
       })
       
-      const data = await response.json()
-      setWeatherData(data)
-      setRiskLevel(data.riskLevel)
+      console.log('Weather response status:', weatherResponse.status)
+      const weatherData = await weatherResponse.json()
+      console.log('Weather data received:', weatherData)
+      setWeatherData(weatherData)
+      setRiskLevel(weatherData.riskLevel)
+
+      // Fetch advanced features in parallel
+      const [aiResponse, satelliteResponse, patternsResponse] = await Promise.allSettled([
+        fetch('/api/weather/ai-prediction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            latitude: selectedLocation.latitude,
+            longitude: selectedLocation.longitude,
+            date: selectedDate.toISOString(),
+            eventType: 'outdoor',
+            currentConditions: {
+              temperature: weatherData.temperature,
+              humidity: weatherData.humidity,
+              windSpeed: weatherData.windSpeed,
+              precipitation: weatherData.precipitation,
+              conditions: weatherData.conditions
+            }
+          })
+        }),
+        fetch('/api/satellite/imagery', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            latitude: selectedLocation.latitude,
+            longitude: selectedLocation.longitude,
+            date: selectedDate.toISOString(),
+            imageryType: 'composite',
+            resolution: 'high'
+          })
+        }),
+        fetch('/api/weather/patterns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            latitude: selectedLocation.latitude,
+            longitude: selectedLocation.longitude,
+            date: selectedDate.toISOString(),
+            patternType: 'comprehensive'
+          })
+        })
+      ])
+
+      if (aiResponse.status === 'fulfilled' && aiResponse.value.ok) {
+        const aiData = await aiResponse.value.json()
+        setAiPrediction(aiData)
+      }
+
+      if (satelliteResponse.status === 'fulfilled' && satelliteResponse.value.ok) {
+        const satelliteData = await satelliteResponse.value.json()
+        setSatelliteImagery(satelliteData)
+      }
+
+      if (patternsResponse.status === 'fulfilled' && patternsResponse.value.ok) {
+        const patternsData = await patternsResponse.value.json()
+        setWeatherPatterns(patternsData)
+      }
+
     } catch (error) {
       console.error('Error fetching weather data:', error)
     } finally {
       setIsLoading(false)
+      setIsAdvancedLoading(false)
     }
   }
 
@@ -305,9 +380,6 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <Badge variant="outline" className="border-blue-500 text-blue-300">
-                Advanced Weather Prediction
-              </Badge>
               <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm" className="border-blue-500 text-blue-300 hover:bg-blue-600">
@@ -555,15 +627,21 @@ export default function Home() {
 
               {/* Notifications */}
               <div className="relative">
-                <Button variant="outline" size="sm" className="border-blue-500 text-blue-300 hover:bg-blue-600 relative">
-                  <BellIcon className="w-4 h-4 mr-2" />
-                  Alerts
-                  {notifications.length > 0 && (
-                    <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center p-0">
-                      {notifications.filter(n => !n.read).length}
-                    </Badge>
-                  )}
-                </Button>
+                <Link href="/alerts">
+  <Button
+    variant="outline"
+    size="sm"
+    className="border-blue-500 text-blue-300 hover:bg-blue-600 relative"
+  >
+    <BellIcon className="w-4 h-4 mr-2" />
+    Alerts
+    {notifications.length > 0 && (
+      <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center p-0">
+        {notifications.filter(n => !n.read).length}
+      </Badge>
+    )}
+  </Button>
+</Link>
                 
                 {notifications.length > 0 && (
                   <div className="absolute right-0 mt-2 w-80 bg-slate-800 border border-blue-700 rounded-lg shadow-lg z-50">
@@ -693,7 +771,10 @@ export default function Home() {
                       <Calendar
                         mode="single"
                         selected={selectedDate}
-                        onSelect={setSelectedDate}
+                        onSelect={(date) => {
+                          console.log('Date selected:', date)
+                          setSelectedDate(date)
+                        }}
                         initialFocus
                         className="bg-slate-800 text-white"
                       />
@@ -809,12 +890,15 @@ export default function Home() {
 
                 {/* Detailed Analysis */}
                 <Tabs defaultValue="hourly" className="bg-slate-800/50 border-blue-700 rounded-lg p-6 backdrop-blur-sm">
-                  <TabsList className="grid w-full grid-cols-6 bg-slate-700">
+                  <TabsList className="grid w-full grid-cols-9 bg-slate-700">
                     <TabsTrigger value="hourly">Hourly Forecast</TabsTrigger>
                     <TabsTrigger value="analysis">Risk Analysis</TabsTrigger>
                     <TabsTrigger value="wet-conditions">Wet Conditions</TabsTrigger>
                     <TabsTrigger value="visualizations">Visualizations</TabsTrigger>
                     <TabsTrigger value="history">History & Trends</TabsTrigger>
+                    <TabsTrigger value="ai-prediction">AI Analysis</TabsTrigger>
+                    <TabsTrigger value="satellite">Satellite</TabsTrigger>
+                    <TabsTrigger value="patterns">Patterns</TabsTrigger>
                     <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
                   </TabsList>
                   
@@ -1409,6 +1493,450 @@ export default function Home() {
                           </div>
                         </CardContent>
                       </Card>
+                    </div>
+                  </TabsContent>
+                  
+                  {/* AI Analysis Tab */}
+                  <TabsContent value="ai-prediction" className="mt-4">
+                    <div className="space-y-6">
+                      <h3 className="text-lg font-semibold">AI-Powered Weather Intelligence</h3>
+                      
+                      {isAdvancedLoading ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
+                          <p className="text-slate-300">Analyzing with advanced AI models...</p>
+                        </div>
+                      ) : aiPrediction ? (
+                        <>
+                          {/* AI Overall Assessment */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm flex items-center gap-2">
+                                <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                                AI Assessment
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium">Confidence Level</span>
+                                  <Badge variant="outline" className="border-green-500 text-green-300">
+                                    {Math.round(aiPrediction.aiAnalysis.confidenceLevel * 100)}%
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-slate-300">
+                                  {aiPrediction.aiAnalysis.overallAssessment}
+                                </p>
+                                
+                                {/* Key Factors */}
+                                <div className="space-y-2">
+                                  <h4 className="text-sm font-semibold text-blue-400">Key Factors</h4>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    {aiPrediction.aiAnalysis.keyFactors.slice(0, 4).map((factor: string, index: number) => (
+                                      <div key={index} className="p-2 bg-slate-600 rounded text-xs">
+                                        {factor}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Risk Prediction */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm">AI Risk Prediction</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-lg font-semibold text-blue-400">
+                                    {aiPrediction.aiAnalysis.riskPrediction.level}
+                                  </span>
+                                  <Badge variant="outline" className="border-blue-500 text-blue-300">
+                                    {Math.round(aiPrediction.aiAnalysis.riskPrediction.probability)}% probability
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-slate-300">
+                                  {aiPrediction.aiAnalysis.riskPrediction.reasoning}
+                                </p>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Predictive Insights */}
+                          <div className="grid md:grid-cols-3 gap-4">
+                            <Card className="bg-slate-700 border-slate-600">
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-xs">Short-term (0-6h)</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <ul className="space-y-1">
+                                  {aiPrediction.aiAnalysis.predictiveInsights.shortTerm.slice(0, 2).map((insight: string, index: number) => (
+                                    <li key={index} className="text-xs text-slate-300">• {insight}</li>
+                                  ))}
+                                </ul>
+                              </CardContent>
+                            </Card>
+                            
+                            <Card className="bg-slate-700 border-slate-600">
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-xs">Medium-term (6-24h)</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <ul className="space-y-1">
+                                  {aiPrediction.aiAnalysis.predictiveInsights.mediumTerm.slice(0, 2).map((insight: string, index: number) => (
+                                    <li key={index} className="text-xs text-slate-300">• {insight}</li>
+                                  ))}
+                                </ul>
+                              </CardContent>
+                            </Card>
+                            
+                            <Card className="bg-slate-700 border-slate-600">
+                              <CardHeader className="pb-2">
+                                <CardTitle className="text-xs">Long-term (24-72h)</CardTitle>
+                              </CardHeader>
+                              <CardContent>
+                                <ul className="space-y-1">
+                                  {aiPrediction.aiAnalysis.predictiveInsights.longTerm.slice(0, 2).map((insight: string, index: number) => (
+                                    <li key={index} className="text-xs text-slate-300">• {insight}</li>
+                                  ))}
+                                </ul>
+                              </CardContent>
+                            </Card>
+                          </div>
+
+                          {/* NASA Integration */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm">NASA Integration</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="grid md:grid-cols-3 gap-4 text-center">
+                                <div>
+                                  <div className="text-sm font-semibold text-green-400">
+                                    {aiPrediction.nasaIntegration.satelliteData.available ? 'Available' : 'Unavailable'}
+                                  </div>
+                                  <div className="text-xs text-slate-400">Satellite Data</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-semibold text-blue-400">
+                                    {aiPrediction.nasaIntegration.climateModels.accuracy * 100}%
+                                  </div>
+                                  <div className="text-xs text-slate-400">Model Accuracy</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-semibold text-purple-400">
+                                    {aiPrediction.nasaIntegration.spaceWeather.impact}
+                                  </div>
+                                  <div className="text-xs text-slate-400">Space Weather</div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </>
+                      ) : (
+                        <Card className="bg-slate-700 border-slate-600">
+                          <CardContent className="flex items-center justify-center h-32">
+                            <p className="text-slate-400">AI analysis not available</p>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
+                  {/* Satellite Imagery Tab */}
+                  <TabsContent value="satellite" className="mt-4">
+                    <div className="space-y-6">
+                      <h3 className="text-lg font-semibold">NASA Satellite Imagery Analysis</h3>
+                      
+                      {isAdvancedLoading ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
+                          <p className="text-slate-300">Processing satellite imagery...</p>
+                        </div>
+                      ) : satelliteImagery ? (
+                        <>
+                          {/* Satellite Image */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm">Latest Satellite Image</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                <div className="relative">
+                                  <img 
+                                    src={satelliteImagery.imageryData.satelliteImages[0]?.imageUrl || ''} 
+                                    alt="Satellite imagery"
+                                    className="w-full h-64 object-cover rounded-lg"
+                                  />
+                                  <div className="absolute top-2 right-2 bg-black/50 px-2 py-1 rounded text-xs">
+                                    {satelliteImagery.imageryData.satelliteImages[0]?.quality || 'Good'} Quality
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                                  <div className="text-center">
+                                    <div className="font-semibold">Cloud Cover</div>
+                                    <div className="text-blue-400">
+                                      {satelliteImagery.imageryData.analysis.cloudCoverage.percentage}%
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="font-semibold">Density</div>
+                                    <div className="text-green-400">
+                                      {satelliteImagery.imageryData.analysis.cloudCoverage.density}
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="font-semibold">Precipitation</div>
+                                    <div className="text-purple-400">
+                                      {satelliteImagery.imageryData.analysis.precipitationIndicators.detected ? 'Detected' : 'None'}
+                                    </div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div className="font-semibold">Visibility</div>
+                                    <div className="text-yellow-400">
+                                      {satelliteImagery.imageryData.analysis.atmosphericConditions.visibility}km
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Cloud Analysis */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm">Cloud Analysis</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="grid md:grid-cols-3 gap-4">
+                                <div className="text-center">
+                                  <div className="text-lg font-semibold text-blue-400">
+                                    {satelliteImagery.imageryData.analysis.cloudCoverage.percentage}%
+                                  </div>
+                                  <div className="text-xs text-slate-400">Total Coverage</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-lg font-semibold text-green-400">
+                                    {satelliteImagery.imageryData.analysis.cloudCoverage.altitude.low / 1000}k
+                                  </div>
+                                  <div className="text-xs text-slate-400">Low Clouds</div>
+                                </div>
+                                <div className="text-center">
+                                  <div className="text-lg font-semibold text-purple-400">
+                                    {satelliteImagery.imageryData.analysis.cloudCoverage.altitude.high / 1000}k
+                                  </div>
+                                  <div className="text-xs text-slate-400">High Clouds</div>
+                                </div>
+                              </div>
+                              <div className="mt-4">
+                                <h4 className="text-sm font-semibold mb-2">Cloud Types</h4>
+                                <div className="flex flex-wrap gap-2">
+                                  {satelliteImagery.imageryData.analysis.cloudCoverage.type.map((type: string, index: number) => (
+                                    <Badge key={index} variant="outline" className="border-blue-500 text-blue-300 text-xs">
+                                      {type}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* NASA Data Sources */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm">NASA Data Sources</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-3">
+                                {satelliteImagery.nasaIntegration.dataSources.slice(0, 3).map((source: any, index: number) => (
+                                  <div key={index} className="flex items-center justify-between p-2 bg-slate-600 rounded">
+                                    <div>
+                                      <div className="text-sm font-medium">{source.name}</div>
+                                      <div className="text-xs text-slate-400">{source.type} • {source.resolution}</div>
+                                    </div>
+                                    <Badge variant="outline" className="border-green-500 text-green-300 text-xs">
+                                      {source.coverage}
+                                    </Badge>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </>
+                      ) : (
+                        <Card className="bg-slate-700 border-slate-600">
+                          <CardContent className="flex items-center justify-center h-32">
+                            <p className="text-slate-400">Satellite imagery not available</p>
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
+                  {/* Weather Patterns Tab */}
+                  <TabsContent value="patterns" className="mt-4">
+                    <div className="space-y-6">
+                      <h3 className="text-lg font-semibold">Machine Learning Pattern Recognition</h3>
+                      
+                      {isAdvancedLoading ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400 mx-auto mb-4"></div>
+                          <p className="text-slate-300">Analyzing weather patterns...</p>
+                        </div>
+                      ) : weatherPatterns ? (
+                        <>
+                          {/* Detected Patterns */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm">Detected Weather Patterns</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                {weatherPatterns.patternRecognition.detectedPatterns.slice(0, 3).map((pattern: any, index: number) => (
+                                  <div key={index} className="p-3 bg-slate-600 rounded-lg">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <h4 className="text-sm font-semibold">{pattern.type}</h4>
+                                      <Badge variant="outline" className="border-blue-500 text-blue-300 text-xs">
+                                        {Math.round(pattern.confidence * 100)}% confidence
+                                      </Badge>
+                                    </div>
+                                    <p className="text-xs text-slate-300 mb-2">{pattern.description}</p>
+                                    <div className="grid grid-cols-3 gap-2 text-xs">
+                                      <div>
+                                        <span className="text-blue-400">Frequency:</span> {pattern.characteristics.frequency}
+                                      </div>
+                                      <div>
+                                        <span className="text-green-400">Duration:</span> {pattern.characteristics.duration}
+                                      </div>
+                                      <div>
+                                        <span className="text-purple-400">Predictability:</span> {Math.round(pattern.characteristics.predictability * 100)}%
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Machine Learning Insights */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm">ML Model Performance</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="grid md:grid-cols-4 gap-4 text-center">
+                                <div>
+                                  <div className="text-lg font-semibold text-green-400">
+                                    {Math.round(weatherPatterns.patternRecognition.machineLearningInsights.modelAccuracy * 100)}%
+                                  </div>
+                                  <div className="text-xs text-slate-400">Accuracy</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-semibold text-blue-400">
+                                    {weatherPatterns.patternRecognition.machineLearningInsights.trainingDataPoints.toLocaleString()}
+                                  </div>
+                                  <div className="text-xs text-slate-400">Training Points</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-semibold text-purple-400">
+                                    {Math.round(weatherPatterns.patternRecognition.machineLearningInsights.modelPerformance.f1Score * 100)}%
+                                  </div>
+                                  <div className="text-xs text-slate-400">F1 Score</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-semibold text-yellow-400">
+                                    {Math.round(weatherPatterns.patternRecognition.machineLearningInsights.predictionConfidence.shortTerm * 100)}%
+                                  </div>
+                                  <div className="text-xs text-slate-400">Short-term Confidence</div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+
+                          {/* Anomaly Detection */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm">Anomaly Detection</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              {weatherPatterns.patternRecognition.anomalyDetection.anomalies.length > 0 ? (
+                                <div className="space-y-3">
+                                  {weatherPatterns.patternRecognition.anomalyDetection.anomalies.slice(0, 2).map((anomaly: any, index: number) => (
+                                    <div key={index} className="p-3 bg-slate-600 rounded-lg border-l-4 border-red-500">
+                                      <div className="flex items-center justify-between mb-1">
+                                        <h4 className="text-sm font-semibold">{anomaly.type}</h4>
+                                        <Badge variant="outline" className={`${
+                                          anomaly.severity === 'Critical' ? 'border-red-500 text-red-300' :
+                                          anomaly.severity === 'High' ? 'border-orange-500 text-orange-300' :
+                                          anomaly.severity === 'Medium' ? 'border-yellow-500 text-yellow-300' :
+                                          'border-green-500 text-green-300'
+                                        } text-xs`}>
+                                          {anomaly.severity}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-xs text-slate-300">{anomaly.description}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-slate-400 text-center py-4">
+                                  No significant weather anomalies detected
+                                </p>
+                              )}
+                            </CardContent>
+                          </Card>
+
+                          {/* Climate Signals */}
+                          <Card className="bg-slate-700 border-slate-600">
+                            <CardHeader className="pb-2">
+                              <CardTitle className="text-sm">Climate Signals</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="grid md:grid-cols-2 gap-4">
+                                <div>
+                                  <h4 className="text-sm font-semibold mb-2">Temperature Trend</h4>
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-3 h-3 rounded-full ${
+                                      weatherPatterns.advancedAnalytics.climateSignals.longTermTrends.temperature.trend === 'warming' ? 'bg-red-400' :
+                                      weatherPatterns.advancedAnalytics.climateSignals.longTermTrends.temperature.trend === 'cooling' ? 'bg-blue-400' : 'bg-green-400'
+                                    }`}></div>
+                                    <span className="text-sm capitalize">
+                                      {weatherPatterns.advancedAnalytics.climateSignals.longTermTrends.temperature.trend}
+                                    </span>
+                                    <Badge variant="outline" className="border-blue-500 text-blue-300 text-xs">
+                                      {Math.round(weatherPatterns.advancedAnalytics.climateSignals.longTermTrends.temperature.significance * 100)}% significance
+                                    </Badge>
+                                  </div>
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-semibold mb-2">Precipitation Trend</h4>
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-3 h-3 rounded-full ${
+                                      weatherPatterns.advancedAnalytics.climateSignals.longTermTrends.precipitation.trend === 'increasing' ? 'bg-blue-400' :
+                                      weatherPatterns.advancedAnalytics.climateSignals.longTermTrends.precipitation.trend === 'decreasing' ? 'bg-orange-400' : 'bg-green-400'
+                                    }`}></div>
+                                    <span className="text-sm capitalize">
+                                      {weatherPatterns.advancedAnalytics.climateSignals.longTermTrends.precipitation.trend}
+                                    </span>
+                                    <Badge variant="outline" className="border-blue-500 text-blue-300 text-xs">
+                                      {Math.round(weatherPatterns.advancedAnalytics.climateSignals.longTermTrends.precipitation.significance * 100)}% significance
+                                    </Badge>
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </>
+                      ) : (
+                        <Card className="bg-slate-700 border-slate-600">
+                          <CardContent className="flex items-center justify-center h-32">
+                            <p className="text-slate-400">Pattern analysis not available</p>
+                          </CardContent>
+                        </Card>
+                      )}
                     </div>
                   </TabsContent>
                   

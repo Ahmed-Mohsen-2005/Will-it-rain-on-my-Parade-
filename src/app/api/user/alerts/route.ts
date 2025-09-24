@@ -10,10 +10,13 @@ export async function GET(request: NextRequest) {
         userId,
         isActive: true 
       },
+      include: {
+        location: true
+      },
       orderBy: { createdAt: 'desc' }
     })
 
-    return NextResponse.json(alerts)
+    return NextResponse.json({ alerts })
   } catch (error) {
     console.error('Error fetching user alerts:', error)
     return NextResponse.json(
@@ -31,6 +34,7 @@ export async function POST(request: NextRequest) {
     const alert = await db.weatherAlert.create({
       data: {
         userId,
+        locationId: body.locationId,
         title: body.title,
         description: body.description,
         alertType: body.alertType,
@@ -41,7 +45,8 @@ export async function POST(request: NextRequest) {
         maxTemperature: body.maxTemperature,
         maxWindSpeed: body.maxWindSpeed,
         weatherConditions: body.weatherConditions ? JSON.stringify(body.weatherConditions) : null,
-        eventDate: body.eventDate ? new Date(body.eventDate) : null
+        eventDate: body.eventDate ? new Date(body.eventDate) : null,
+        isActive: body.isActive ?? true
       }
     })
 
