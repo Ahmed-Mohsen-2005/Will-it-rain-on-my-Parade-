@@ -371,8 +371,8 @@ export default function Home() {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-xl font-bold">NASA</span>
+              <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center">
+                <img src="/nasa2.png" alt="Logo" className="w-8 h-8" />
               </div>
               <div>
                 <h1 className="text-2xl font-bold">Will It Rain On My Parade?</h1>
