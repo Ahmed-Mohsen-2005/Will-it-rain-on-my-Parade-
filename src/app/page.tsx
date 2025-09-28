@@ -15,6 +15,18 @@ import { Switch } from '@/components/ui/switch'
 import { CalendarIcon, MapPinIcon, CloudIcon, DropletsIcon, WindIcon, ThermometerIcon, AlertTriangleIcon, UserIcon, SettingsIcon, BellIcon, PlusIcon } from 'lucide-react'
 import { format } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
+import { LoadScript, GoogleMap, Marker } from '@react-google-maps/api'
+
+// Google Maps configuration
+const mapContainerStyle = {
+  width: '100%',
+  height: '400px'
+}
+
+const defaultCenter = {
+  lat: 20,
+  lng: 0
+}
 
 export default function Home() {
   const [location, setLocation] = useState('')
@@ -44,6 +56,11 @@ export default function Home() {
   const [isMonitoring, setIsMonitoring] = useState(false)
   const [socket, setSocket] = useState<any>(null)
 
+  // Map state
+  const [mapCenter, setMapCenter] = useState(defaultCenter)
+  const [mapZoom, setMapZoom] = useState(2)
+  const [map, setMap] = useState<any>(null)
+
   const debounce = (func: (...args: any[]) => void, wait: number) => {
     let timeout: NodeJS.Timeout
     return function executedFunction(...args: any[]) {
@@ -53,6 +70,44 @@ export default function Home() {
       }
       clearTimeout(timeout)
       timeout = setTimeout(later, wait)
+    }
+  }
+
+  // Update map when location is selected
+  useEffect(() => {
+    if (selectedLocation) {
+      setMapCenter({
+        lat: selectedLocation.latitude,
+        lng: selectedLocation.longitude
+      })
+      setMapZoom(10)
+    }
+  }, [selectedLocation])
+
+  const handleMapLoad = (mapInstance: any) => {
+    setMap(mapInstance)
+  }
+
+  const handleMapClick = (e: any) => {
+    if (e.latLng) {
+      const lat = e.latLng.lat()
+      const lng = e.latLng.lng()
+      
+      // Create a mock location object for the clicked point
+      const locationData = {
+        id: `map-${lat}-${lng}`,
+        name: `Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
+        latitude: lat,
+        longitude: lng,
+        address: {
+          city: '',
+          state: '',
+          country: '',
+          countryCode: ''
+        }
+      }
+      setSelectedLocation(locationData)
+      setLocation(locationData.name)
     }
   }
 
@@ -628,20 +683,20 @@ export default function Home() {
               {/* Notifications */}
               <div className="relative">
                 <Link href="/alerts">
-  <Button
-    variant="outline"
-    size="sm"
-    className="border-blue-500 text-blue-300 hover:bg-blue-600 relative"
-  >
-    <BellIcon className="w-4 h-4 mr-2" />
-    Alerts
-    {notifications.length > 0 && (
-      <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center p-0">
-        {notifications.filter(n => !n.read).length}
-      </Badge>
-    )}
-  </Button>
-</Link>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-500 text-blue-300 hover:bg-blue-600 relative"
+                  >
+                    <BellIcon className="w-4 h-4 mr-2" />
+                    Alerts
+                    {notifications.length > 0 && (
+                      <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 flex items-center justify-center p-0">
+                        {notifications.filter(n => !n.read).length}
+                      </Badge>
+                    )}
+                  </Button>
+                </Link>
                 
                 {notifications.length > 0 && (
                   <div className="absolute right-0 mt-2 w-80 bg-slate-800 border border-blue-700 rounded-lg shadow-lg z-50">
@@ -845,9 +900,105 @@ export default function Home() {
             )}
           </div>
 
-          {/* Weather Display */}
+          {/* Weather Display with Google Map */}
           <div className="lg:col-span-2">
-            {weatherData ? (
+            {!weatherData ? (
+              // Show Google Map when no weather data is loaded
+              <Card className="bg-slate-800/50 border-blue-700 backdrop-blur-sm">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MapPinIcon className="w-5 h-5" />
+                    Interactive Location Map
+                  </CardTitle>
+                  <CardDescription className="text-slate-300">
+                    Select a location on the map or search above to get started
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-96 rounded-lg overflow-hidden">
+                    <LoadScript
+                      googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
+                    >
+                      <GoogleMap
+                        mapContainerStyle={mapContainerStyle}
+                        center={mapCenter}
+                        zoom={mapZoom}
+                        onLoad={handleMapLoad}
+                        onClick={handleMapClick}
+                        options={{
+                          styles: [
+                            {
+                              featureType: "all",
+                              elementType: "geometry",
+                              stylers: [{ color: "#1e293b" }]
+                            },
+                            {
+                              featureType: "all",
+                              elementType: "labels.text.stroke",
+                              stylers: [{ color: "#1e293b" }]
+                            },
+                            {
+                              featureType: "all",
+                              elementType: "labels.text.fill",
+                              stylers: [{ color: "#747474" }]
+                            },
+                            {
+                              featureType: "water",
+                              elementType: "geometry",
+                              stylers: [{ color: "#0f172a" }]
+                            },
+                            {
+                              featureType: "water",
+                              elementType: "labels.text.fill",
+                              stylers: [{ color: "#3d3d3d" }]
+                            }
+                          ],
+                          disableDefaultUI: false,
+                          zoomControl: true,
+                          streetViewControl: false,
+                          mapTypeControl: false,
+                          fullscreenControl: true
+                        }}
+                      >
+                        {selectedLocation && (
+                          <Marker
+                            position={{
+                              lat: selectedLocation.latitude,
+                              lng: selectedLocation.longitude
+                            }}
+                            animation={window.google?.maps?.Animation?.DROP}
+                            icon={{
+                              url: 'data:image/svg+xml;base64,' + btoa(`
+                                <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M16 2C11.58 2 8 5.58 8 10C8 16.32 16 30 16 30C16 30 24 16.32 24 10C24 5.58 20.42 2 16 2Z" fill="#3B82F6"/>
+                                  <path d="M16 13C17.6569 13 19 11.6569 19 10C19 8.34315 17.6569 7 16 7C14.3431 7 13 8.34315 13 10C13 11.6569 14.3431 13 16 13Z" fill="white"/>
+                                </svg>
+                              `),
+                              scaledSize: new window.google.maps.Size(32, 32),
+                              anchor: new window.google.maps.Point(16, 32)
+                            }}
+                          />
+                        )}
+                      </GoogleMap>
+                    </LoadScript>
+                  </div>
+                  
+                  <div className="mt-4 p-4 bg-slate-700/50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <MapPinIcon className="w-5 h-5 text-blue-400" />
+                      <div>
+                        <h4 className="font-semibold text-sm">How to use the map</h4>
+                        <p className="text-xs text-slate-300 mt-1">
+                          Click anywhere on the map to select a location, or use the search box to find a specific place. 
+                          Then select a date and click "Check Weather Risk" to get detailed analysis.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              // Show weather data when available
               <div className="space-y-6">
                 {/* Current Weather */}
                 <Card className="bg-slate-800/50 border-blue-700 backdrop-blur-sm">
@@ -1961,16 +2112,6 @@ export default function Home() {
                   </TabsContent>
                 </Tabs>
               </div>
-            ) : (
-              <Card className="bg-slate-800/50 border-blue-700 backdrop-blur-sm">
-                <CardContent className="flex items-center justify-center h-96">
-                  <div className="text-center">
-                    <CloudIcon className="w-16 h-16 mx-auto mb-4 text-blue-400 opacity-50" />
-                    <h3 className="text-xl font-semibold mb-2">Weather Forecast Dashboard</h3>
-                    <p className="text-slate-300">Enter a location and date to get detailed weather analysis for your event.</p>
-                  </div>
-                </CardContent>
-              </Card>
             )}
           </div>
         </div>
