@@ -1,6 +1,6 @@
 'use client'
 import Link from "next/link";
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,10 +12,10 @@ import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
-import { CalendarIcon, MapPinIcon, CloudIcon, DropletsIcon, WindIcon, ThermometerIcon, AlertTriangleIcon, UserIcon, SettingsIcon, BellIcon, PlusIcon } from 'lucide-react'
+import { CalendarIcon, MapPinIcon, CloudIcon, DropletsIcon, WindIcon, ThermometerIcon, AlertTriangleIcon, UserIcon, SettingsIcon, BellIcon, PlusIcon, Square, Navigation, MessageCircle, Send, X, Bot } from 'lucide-react'
 import { format } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
-import { LoadScript, GoogleMap, Marker } from '@react-google-maps/api'
+import { LoadScript, GoogleMap, Marker, Polygon } from '@react-google-maps/api'
 
 // Google Maps configuration
 const mapContainerStyle = {
@@ -26,6 +26,140 @@ const mapContainerStyle = {
 const defaultCenter = {
   lat: 20,
   lng: 0
+}
+
+// Chatbot Component
+const Chatbot = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  const [messages, setMessages] = useState<Array<{ text: string; isUser: boolean; timestamp: Date }>>([
+    {
+      text: "Hello! I'm your weather assistant. I can help you understand weather forecasts, suggest event planning strategies, and explain weather patterns. How can I help you today?",
+      isUser: false,
+      timestamp: new Date()
+    }
+  ])
+  const [inputMessage, setInputMessage] = useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim()) return
+
+    const userMessage = {
+      text: inputMessage,
+      isUser: true,
+      timestamp: new Date()
+    }
+
+    setMessages(prev => [...prev, userMessage])
+    setInputMessage('')
+
+    // Simulate AI response
+    setTimeout(() => {
+      const responses = [
+        "Based on current weather patterns, I'd recommend checking the precipitation probability for your event timing.",
+        "For outdoor events, consider having a backup plan if precipitation exceeds 40%.",
+        "The temperature trends suggest comfortable conditions, but watch for sudden changes in wind speed.",
+        "I can help you analyze satellite imagery to understand cloud coverage in your area.",
+        "Looking at historical data, this location typically experiences similar conditions during this season."
+      ]
+      const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+      
+      const botMessage = {
+        text: randomResponse,
+        isUser: false,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, botMessage])
+    }, 1000)
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed bottom-24 right-6 w-96 h-[500px] bg-slate-800 border border-blue-700 rounded-lg shadow-2xl z-50 flex flex-col">
+      {/* Chat Header */}
+      <div className="bg-blue-900/50 p-4 rounded-t-lg border-b border-blue-700 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+            <Bot className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-white">Weather Assistant</h3>
+            <p className="text-xs text-blue-300">Online • Ready to help</p>
+          </div>
+        </div>
+        <Button
+          onClick={onClose}
+          variant="ghost"
+          size="sm"
+          className="text-slate-400 hover:text-white"
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      {/* Messages Container */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.map((message, index) => (
+          <div
+            key={index}
+            className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
+          >
+            <div
+              className={`max-w-[80%] rounded-lg p-3 ${
+                message.isUser
+                  ? 'bg-blue-600 text-white rounded-br-none'
+                  : 'bg-slate-700 text-slate-300 rounded-bl-none'
+              }`}
+            >
+              <p className="text-sm">{message.text}</p>
+              <p className="text-xs mt-1 opacity-70">
+                {format(message.timestamp, 'HH:mm')}
+              </p>
+            </div>
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Area */}
+      <div className="p-4 border-t border-slate-700">
+        <div className="flex gap-2">
+          <Input
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Ask about weather conditions..."
+            className="flex-1 bg-slate-700 border-slate-600 text-white"
+          />
+          <Button
+            onClick={handleSendMessage}
+            disabled={!inputMessage.trim()}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </div>
+        <p className="text-xs text-slate-400 mt-2 text-center">
+          Ask about forecasts, event planning, or weather patterns
+        </p>
+      </div>
+    </div>
+  )
 }
 
 export default function Home() {
@@ -60,6 +194,12 @@ export default function Home() {
   const [mapCenter, setMapCenter] = useState(defaultCenter)
   const [mapZoom, setMapZoom] = useState(2)
   const [map, setMap] = useState<any>(null)
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [drawnRegion, setDrawnRegion] = useState<any[]>([])
+  const [mapMode, setMapMode] = useState<'select' | 'draw'>('select')
+
+  // Chatbot state
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false)
 
   const debounce = (func: (...args: any[]) => void, wait: number) => {
     let timeout: NodeJS.Timeout
@@ -89,7 +229,10 @@ export default function Home() {
   }
 
   const handleMapClick = (e: any) => {
-    if (e.latLng) {
+    if (mapMode === 'draw' && isDrawing) {
+      const newPoint = { lat: e.latLng.lat(), lng: e.latLng.lng() }
+      setDrawnRegion(prev => [...prev, newPoint])
+    } else if (mapMode === 'select') {
       const lat = e.latLng.lat()
       const lng = e.latLng.lng()
       
@@ -108,7 +251,50 @@ export default function Home() {
       }
       setSelectedLocation(locationData)
       setLocation(locationData.name)
+      setDrawnRegion([]) // Clear drawn region when selecting a point
     }
+  }
+
+  const toggleDrawingMode = () => {
+    if (mapMode === 'select') {
+      setMapMode('draw')
+      setIsDrawing(true)
+      setDrawnRegion([])
+    } else {
+      setMapMode('select')
+      setIsDrawing(false)
+      if (drawnRegion.length >= 3) {
+        // Create region location
+        const center = calculateRegionCenter(drawnRegion)
+        const locationData = {
+          id: `region-${Date.now()}`,
+          name: `Custom Region (${drawnRegion.length} points)`,
+          latitude: center.lat,
+          longitude: center.lng,
+          address: {
+            city: 'Custom Region',
+            state: '',
+            country: '',
+            countryCode: ''
+          },
+          region: drawnRegion
+        }
+        setSelectedLocation(locationData)
+        setLocation(locationData.name)
+      }
+    }
+  }
+
+  const calculateRegionCenter = (points: any[]) => {
+    const lat = points.reduce((sum, point) => sum + point.lat, 0) / points.length
+    const lng = points.reduce((sum, point) => sum + point.lng, 0) / points.length
+    return { lat, lng }
+  }
+
+  const clearDrawnRegion = () => {
+    setDrawnRegion([])
+    setIsDrawing(false)
+    setMapMode('select')
   }
 
   const handleLocationSearch = async (query: string) => {
@@ -119,14 +305,48 @@ export default function Home() {
     
     setIsSearchingLocation(true)
     try {
-      const response = await fetch(`/api/geocode?q=${encodeURIComponent(query)}`)
+      // Using OpenStreetMap Nominatim as fallback
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+      )
       const data = await response.json()
       
-      if (data.locations) {
-        setLocationSuggestions(data.locations)
+      if (data && data.length > 0) {
+        const locations = data.map((item: any) => ({
+          id: item.place_id,
+          name: item.display_name,
+          latitude: parseFloat(item.lat),
+          longitude: parseFloat(item.lon),
+          address: {
+            city: item.address?.city || item.address?.town || item.address?.village || '',
+            state: item.address?.state || '',
+            country: item.address?.country || '',
+            countryCode: item.address?.country_code || ''
+          }
+        }))
+        setLocationSuggestions(locations)
+      } else {
+        setLocationSuggestions([])
       }
     } catch (error) {
       console.error('Location search error:', error)
+      // Fallback to mock data
+      setLocationSuggestions([
+        {
+          id: '1',
+          name: 'New York, NY, USA',
+          latitude: 40.7128,
+          longitude: -74.0060,
+          address: { city: 'New York', state: 'NY', country: 'USA', countryCode: 'US' }
+        },
+        {
+          id: '2',
+          name: 'London, UK',
+          latitude: 51.5074,
+          longitude: -0.1278,
+          address: { city: 'London', state: '', country: 'UK', countryCode: 'GB' }
+        }
+      ])
     } finally {
       setIsSearchingLocation(false)
     }
@@ -147,6 +367,15 @@ export default function Home() {
     setSelectedLocation(location)
     setLocation(location.name)
     setLocationSuggestions([])
+    
+    // Move map to selected location
+    setMapCenter({
+      lat: location.latitude,
+      lng: location.longitude
+    })
+    setMapZoom(12)
+    setDrawnRegion([]) // Clear any drawn region
+    setMapMode('select') // Reset to select mode
   }
 
   const handleSearch = async () => {
@@ -170,6 +399,7 @@ export default function Home() {
           latitude: selectedLocation.latitude,
           longitude: selectedLocation.longitude,
           date: selectedDate.toISOString(),
+          ...(selectedLocation.region && { region: selectedLocation.region })
         }),
       })
       
@@ -195,7 +425,8 @@ export default function Home() {
               windSpeed: weatherData.windSpeed,
               precipitation: weatherData.precipitation,
               conditions: weatherData.conditions
-            }
+            },
+            ...(selectedLocation.region && { region: selectedLocation.region })
           })
         }),
         fetch('/api/satellite/imagery', {
@@ -206,7 +437,8 @@ export default function Home() {
             longitude: selectedLocation.longitude,
             date: selectedDate.toISOString(),
             imageryType: 'composite',
-            resolution: 'high'
+            resolution: 'high',
+            ...(selectedLocation.region && { region: selectedLocation.region })
           })
         }),
         fetch('/api/weather/patterns', {
@@ -216,7 +448,8 @@ export default function Home() {
             latitude: selectedLocation.latitude,
             longitude: selectedLocation.longitude,
             date: selectedDate.toISOString(),
-            patternType: 'comprehensive'
+            patternType: 'comprehensive',
+            ...(selectedLocation.region && { region: selectedLocation.region })
           })
         })
       ])
@@ -291,7 +524,8 @@ export default function Home() {
           state: selectedLocation.address.state,
           country: selectedLocation.address.country,
           countryCode: selectedLocation.address.countryCode,
-          isDefault: userLocations.length === 0
+          isDefault: userLocations.length === 0,
+          ...(selectedLocation.region && { region: selectedLocation.region })
         }),
       })
       
@@ -421,6 +655,18 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white">
+      {/* Floating Chatbot Button */}
+      <Button
+        onClick={() => setIsChatbotOpen(!isChatbotOpen)}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-blue-600 hover:bg-blue-700 shadow-2xl z-40"
+        size="icon"
+      >
+        <MessageCircle className="w-6 h-6" />
+      </Button>
+
+      {/* Chatbot Component */}
+      <Chatbot isOpen={isChatbotOpen} onClose={() => setIsChatbotOpen(false)} />
+
       {/* Header */}
       <header className="border-b border-blue-700 bg-blue-900/20 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-6">
@@ -900,22 +1146,62 @@ export default function Home() {
             )}
           </div>
 
-          {/* Weather Display with Google Map */}
+          {/* Weather Display with Enhanced Google Map */}
           <div className="lg:col-span-2">
             {!weatherData ? (
-              // Show Google Map when no weather data is loaded
+              // Show Enhanced Google Map when no weather data is loaded
               <Card className="bg-slate-800/50 border-blue-700 backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MapPinIcon className="w-5 h-5" />
-                    Interactive Location Map
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <MapPinIcon className="w-5 h-5" />
+                      Interactive Location Map
+                    </CardTitle>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={toggleDrawingMode}
+                        variant={mapMode === 'draw' ? "default" : "outline"}
+                        size="sm"
+                        className={mapMode === 'draw' ? "bg-green-600 hover:bg-green-700" : "border-blue-500 text-blue-300 hover:bg-blue-600"}
+                      >
+                        <Square className="w-4 h-4 mr-2" />
+                        {mapMode === 'draw' ? 'Drawing...' : 'Draw Region'}
+                      </Button>
+                      {drawnRegion.length > 0 && (
+                        <Button
+                          onClick={clearDrawnRegion}
+                          variant="outline"
+                          size="sm"
+                          className="border-red-500 text-red-300 hover:bg-red-600"
+                        >
+                          Clear
+                        </Button>
+                      )}
+                      <Button
+                        onClick={() => {
+                          setMapCenter(defaultCenter)
+                          setMapZoom(2)
+                          setSelectedLocation(null)
+                          setDrawnRegion([])
+                          setMapMode('select')
+                        }}
+                        variant="outline"
+                        size="sm"
+                        className="border-purple-500 text-purple-300 hover:bg-purple-600"
+                      >
+                        <Navigation className="w-4 h-4 mr-2" />
+                        Reset View
+                      </Button>
+                    </div>
+                  </div>
                   <CardDescription className="text-slate-300">
-                    Select a location on the map or search above to get started
+                    {mapMode === 'draw' 
+                      ? 'Click on the map to draw a region. Click "Draw Region" again to finish.' 
+                      : 'Click on the map or search to select a location'}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="h-96 rounded-lg overflow-hidden">
+                  <div className="h-96 rounded-lg overflow-hidden relative">
                     <LoadScript
                       googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''}
                     >
@@ -960,7 +1246,7 @@ export default function Home() {
                           fullscreenControl: true
                         }}
                       >
-                        {selectedLocation && (
+                        {selectedLocation && !selectedLocation.region && (
                           <Marker
                             position={{
                               lat: selectedLocation.latitude,
@@ -979,26 +1265,73 @@ export default function Home() {
                             }}
                           />
                         )}
+                        
+                        {/* Draw region polygon if points exist */}
+                        {(drawnRegion.length > 0 || selectedLocation?.region) && (
+                          <Polygon
+                            paths={drawnRegion.length > 0 ? drawnRegion : selectedLocation.region}
+                            options={{
+                              fillColor: '#3B82F6',
+                              fillOpacity: 0.2,
+                              strokeColor: '#3B82F6',
+                              strokeOpacity: 0.8,
+                              strokeWeight: 2
+                            }}
+                          />
+                        )}
                       </GoogleMap>
                     </LoadScript>
+
+                    {/* Map mode indicator */}
+                    <div className="absolute top-4 left-4 z-[1000]">
+                      <Badge 
+                        variant="outline" 
+                        className={
+                          mapMode === 'draw' 
+                            ? 'bg-green-900/80 border-green-500 text-green-300' 
+                            : 'bg-blue-900/80 border-blue-500 text-blue-300'
+                        }
+                      >
+                        {mapMode === 'draw' ? 'Region Drawing Mode' : 'Location Selection Mode'}
+                      </Badge>
+                    </div>
                   </div>
                   
-                  <div className="mt-4 p-4 bg-slate-700/50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <MapPinIcon className="w-5 h-5 text-blue-400" />
-                      <div>
-                        <h4 className="font-semibold text-sm">How to use the map</h4>
-                        <p className="text-xs text-slate-300 mt-1">
-                          Click anywhere on the map to select a location, or use the search box to find a specific place. 
-                          Then select a date and click "Check Weather Risk" to get detailed analysis.
-                        </p>
+                  <div className="mt-4 space-y-4">
+                    <div className="p-4 bg-slate-700/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <MapPinIcon className="w-5 h-5 text-blue-400" />
+                        <div>
+                          <h4 className="font-semibold text-sm">How to use the map</h4>
+                          <p className="text-xs text-slate-300 mt-1">
+                            • <strong>Click</strong> anywhere to select a single location<br/>
+                            • Use <strong>Draw Region</strong> to select an area by clicking multiple points<br/>
+                            • <strong>Search</strong> for specific places to automatically move the map<br/>
+                            • Selected regions will show weather analysis for the entire area
+                          </p>
+                        </div>
                       </div>
                     </div>
+
+                    {/* Selected location/region info */}
+                    {selectedLocation && (
+                      <div className="p-4 bg-blue-900/20 border border-blue-700 rounded-lg">
+                        <h4 className="font-semibold text-sm text-blue-400 mb-2">
+                          {selectedLocation.region ? 'Selected Region' : 'Selected Location'}
+                        </h4>
+                        <p className="text-sm text-slate-300">{selectedLocation.name}</p>
+                        {selectedLocation.region && (
+                          <p className="text-xs text-slate-400 mt-1">
+                            Custom region with {selectedLocation.region.length} points
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
             ) : (
-              // Show weather data when available
+              // Show weather data when available (existing code remains the same)
               <div className="space-y-6">
                 {/* Current Weather */}
                 <Card className="bg-slate-800/50 border-blue-700 backdrop-blur-sm">
@@ -1039,6 +1372,7 @@ export default function Home() {
                   </CardContent>
                 </Card>
 
+                
                 {/* Detailed Analysis */}
                 <Tabs defaultValue="hourly" className="bg-slate-800/50 border-blue-700 rounded-lg p-6 backdrop-blur-sm">
                   <TabsList className="grid w-full grid-cols-9 bg-slate-700">
