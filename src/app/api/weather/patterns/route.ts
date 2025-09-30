@@ -304,6 +304,8 @@ function parsePatternAnalysis(analysis: string, request: WeatherPatternRequest):
   }
 
   // Generate anomaly detection
+  const directions = ['increasing', 'decreasing', 'stable'] as const;
+  const trendDirection = directions[Math.floor(Math.random() * directions.length)];
   const anomalyDetection = {
     anomalies: generateAnomalies(request.latitude, request.longitude),
     trendAnalysis: {
@@ -314,7 +316,7 @@ function parsePatternAnalysis(analysis: string, request: WeatherPatternRequest):
         stdDev: 2 + Math.random() * 2
       },
       currentDeviation: (Math.random() - 0.5) * 4,
-      trendDirection: Math.random() > 0.5 ? 'increasing' : Math.random() > 0.5 ? 'decreasing' : 'stable',
+      trendDirection,
       trendStrength: Math.random()
     }
   }
@@ -642,7 +644,20 @@ function generateAnomalies(lat: number, lon: number): Array<{
     recommendedActions: string[]
   }
 }> {
-  const anomalies = []
+  const anomalies: Array<{
+    id: string
+    type: string
+    severity: 'Low' | 'Medium' | 'High' | 'Critical'
+    description: string
+    deviation: number
+    statisticalSignificance: number
+    potentialCauses: string[]
+    impactAssessment: {
+      weatherImpact: string
+      riskLevel: string
+      recommendedActions: string[]
+    }
+  }> = []
 
   if (Math.random() > 0.6) {
     anomalies.push({
@@ -706,7 +721,15 @@ function generateTimeSeriesForecast(hours: number, minVal: number, maxVal: numbe
     max: number
   }
 }> {
-  const forecast = []
+  const forecast: Array<{
+    time: string
+    value: number
+    confidence: number
+    range: {
+      min: number
+      max: number
+    }
+  }> = []
   const baseValue = (minVal + maxVal) / 2
   
   for (let i = 0; i < hours; i++) {

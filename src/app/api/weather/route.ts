@@ -144,7 +144,14 @@ function calculateWetConditionsRisk(precipitation: number, humidity: number, win
 
 function generateHistoricalWeatherData(request: any) {
   const conditions = ['Sunny', 'Partly Cloudy', 'Cloudy', 'Rainy', 'Thunderstorm']
-  const data = []
+  const data: Array<{
+    date: string;
+    temperature: number;
+    precipitation: number;
+    humidity: number;
+    windSpeed: number;
+    conditions: string;
+  }> = []
   
   for (let i = 30; i >= 0; i--) {
     const date = new Date()
@@ -202,7 +209,7 @@ function analyzeTrends(data: any[]) {
   }, {} as { [key: string]: number })
   
   const mostCommonCondition = Object.entries(conditionCounts)
-    .sort(([,a], [,b]) => b - a)[0]?.[0] || 'Unknown'
+    .sort(([, a], [, b]) => (b as number) - (a as number))[0]?.[0] || 'Unknown'
   
   // Analyze weekly patterns
   const weeklyPatterns: { [key: string]: any } = {}
