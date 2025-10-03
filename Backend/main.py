@@ -1,54 +1,39 @@
-from fastapi import FastAPI, HTTPException
-from datetime import datetime
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import pandas as pd
+import io
 
-app = FastAPI(title="Will-it-rain-on-my-Parade (FastAPI Backend)")
+app = FastAPI(title="Will it Rain Backend 🌧️")
+
+# Demo/mock data (you can replace with real weather API later)
+mock_data = [
+    {"city": "Cairo", "temperature": 32, "rain": "No"},
+    {"city": "Alexandria", "temperature": 28, "rain": "Yes"},
+    {"city": "Giza", "temperature": 30, "rain": "No"},
+]
+
 @app.get("/")
 def root():
-    return {"message": "FastAPI backend is running 🚀"}
-@app.get("/api/health")
-async def health():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+    return {"message": "FastAPI backend running 🚀"}
 
+# Return mock data in JSON
+@app.get("/data")
+def get_data():
+    return {"data": mock_data}
 
-@app.get("/api/weather")
-async def get_weather():
-    return {"message": "Weather endpoint (stub)"}
+# Export mock data as CSV
+@app.get("/data/csv")
+def export_csv():
+    df = pd.DataFrame(mock_data)
+    stream = io.StringIO()
+    df.to_csv(stream, index=False)
+    response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
+    response.headers["Content-Disposition"] = "attachment; filename=data.csv"
+    return response
 
-@app.get("/api/weather/history")
-async def get_weather_history():
-    return {"message": "Weather history (stub)"}
-
-@app.get("/api/weather/patterns")
-async def get_weather_patterns():
-    return {"message": "Weather patterns (stub)"}
-
-@app.get("/api/weather/ai-prediction")
-async def get_weather_ai():
-    return {"message": "AI weather prediction (stub)"}
-
-
-@app.get("/api/satellite/imagery")
-async def get_satellite_imagery():
-    return {"message": "Satellite imagery (stub)"}
-
-
-@app.get("/api/geocode")
-async def geocode(address: str):
-    return {"address": address, "lat": 30.0444, "lon": 31.2357}  # Cairo stub
-
-
-@app.get("/api/user/profile")
-async def get_user_profile():
-    return {"message": "User profile (stub)"}
-
-@app.get("/api/user/locations")
-async def get_user_locations():
-    return {"message": "User locations (stub)"}
-
-@app.get("/api/user/alerts")
-async def get_user_alerts():
-    return {"message": "User alerts list (stub)"}
-
-@app.get("/api/user/alerts/{id}")
-async def get_user_alert(id: int):
-    return {"alert_id": id, "message": "Single alert (stub)"}
+# Simple chatbot endpoint
+@app.post("/chat")
+def chatbot(message: dict):
+    user_msg = message.get("text", "")
+    reply = f"🤖 Bot: You said '{user_msg}'"
+    return {"reply": reply}
