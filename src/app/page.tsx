@@ -16,8 +16,10 @@ import { CalendarIcon, MapPinIcon, CloudIcon, DropletsIcon, WindIcon, Thermomete
 import { format } from 'date-fns'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 import { LoadScript, GoogleMap, Marker, Polygon } from '@react-google-maps/api'
-
+// Find this line (around line 15):
+import { DownloadIcon } from 'lucide-react'
 // Google Maps configuration
+
 const mapContainerStyle = {
   width: '100%',
   height: '400px'
@@ -164,6 +166,7 @@ const Chatbot = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) 
 
 export default function Home() {
   const [location, setLocation] = useState('')
+  const [hasCheckedWeather, setHasCheckedWeather] = useState(false)
   const [locationSuggestions, setLocationSuggestions] = useState<any[]>([])
   const [selectedLocation, setSelectedLocation] = useState<any>(null)
   const [selectedDate, setSelectedDate] = useState<Date>()
@@ -361,7 +364,119 @@ export default function Home() {
       setLocationSuggestions([])
     }
   }, [location, debouncedLocationSearch])
+  // Download functions
+  const downloadJSONReport = () => {
+    if (!weatherData) return
 
+    const reportData = {
+      metadata: {
+        generatedAt: new Date().toISOString(),
+        location: selectedLocation,
+        date: selectedDate,
+        reportType: 'Weather Analysis Report'
+      },
+      weatherData: {
+        ...weatherData,
+        aiPrediction,
+        satelliteImagery,
+        weatherPatterns
+      },
+      userProfile: {
+        locations: userLocations,
+        alerts: userAlerts,
+        preferences: userProfile?.profile
+      },
+      riskAssessment: {
+        riskLevel,
+        recommendations: weatherData.recommendations,
+        riskAnalysis: weatherData.riskAnalysis
+      }
+    }
+
+    const dataStr = JSON.stringify(reportData, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `weather-report-${selectedLocation?.name || 'unknown'}-${format(new Date(), 'yyyy-MM-dd')}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const downloadCSVReport = () => {
+    if (!weatherData) return
+
+    // Create CSV content
+    const csvContent = [
+      // Metadata
+      ['Weather Report Generated:', format(new Date(), 'yyyy-MM-dd HH:mm:ss')],
+      ['Location:', selectedLocation?.name || 'Unknown'],
+      ['Coordinates:', `${selectedLocation?.latitude}, ${selectedLocation?.longitude}`],
+      ['Date:', format(selectedDate || new Date(), 'yyyy-MM-dd')],
+      ['Risk Level:', riskLevel],
+      [''],
+      
+      // Current Weather Data
+      ['Current Weather Conditions'],
+      ['Metric', 'Value', 'Unit'],
+      ['Temperature', weatherData.temperature, '°C'],
+      ['Humidity', weatherData.humidity, '%'],
+      ['Wind Speed', weatherData.windSpeed, 'km/h'],
+      ['Precipitation Probability', weatherData.precipitation, '%'],
+      ['Conditions', weatherData.conditions, ''],
+      [''],
+      
+      // Hourly Forecast
+      ['Hourly Forecast'],
+      ['Time', 'Temperature (°C)', 'Precipitation (%)', 'Conditions'],
+      ...weatherData.hourlyForecast.map((hour: any) => [
+        hour.time,
+        hour.temperature,
+        hour.precipitation,
+        hour.conditions
+      ]),
+      [''],
+      
+      // Risk Analysis
+      ['Risk Analysis'],
+      ['Category', 'Level', 'Description'],
+      ['Precipitation Risk', weatherData.riskAnalysis.precipitationRisk.level, weatherData.riskAnalysis.precipitationRisk.description],
+      ['Wind Impact', weatherData.riskAnalysis.windImpact.level, weatherData.riskAnalysis.windImpact.description],
+      ['Temperature Comfort', weatherData.riskAnalysis.temperatureComfort.level, weatherData.riskAnalysis.temperatureComfort.description],
+      [''],
+      
+      // Recommendations
+      ['Recommendations'],
+      ['Category', 'Advice'],
+      ['Weather Advisory', weatherData.recommendations.weatherAdvisory],
+      ['Optimal Timing', weatherData.recommendations.optimalTiming],
+      ['Backup Plans', weatherData.recommendations.backupPlans],
+      [''],
+      
+      // User Locations
+      ['Saved Locations'],
+      ['Name', 'City', 'State', 'Country', 'Default'],
+      ...userLocations.map((loc: any) => [
+        loc.name,
+        loc.city || '',
+        loc.state || '',
+        loc.country || '',
+        loc.isDefault ? 'Yes' : 'No'
+      ])
+    ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n')
+
+    const dataBlob = new Blob([csvContent], { type: 'text/csv' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `weather-report-${selectedLocation?.name || 'unknown'}-${format(new Date(), 'yyyy-MM-dd')}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
   const handleLocationSelect = (location: any) => {
     console.log('Location selected:', location)
     setSelectedLocation(location)
@@ -388,6 +503,7 @@ export default function Home() {
     setIsLoading(true)
     setIsAdvancedLoading(true)
     try {
+      
       console.log('Making API request to /api/weather')
       // Fetch basic weather data
       const weatherResponse = await fetch('/api/weather', {
@@ -408,6 +524,7 @@ export default function Home() {
       console.log('Weather data received:', weatherData)
       setWeatherData(weatherData)
       setRiskLevel(weatherData.riskLevel)
+      setHasCheckedWeather(true)
 
       // Fetch advanced features in parallel
       const [aiResponse, satelliteResponse, patternsResponse] = await Promise.allSettled([
@@ -553,6 +670,7 @@ export default function Home() {
       console.error('Error creating weather alert:', error)
     }
   }
+  
 
   // Load user profile on component mount
   useEffect(() => {
@@ -652,6 +770,7 @@ export default function Home() {
       default: return 'bg-gray-500'
     }
   }
+    // ✅ Show download buttons after success
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white">
@@ -680,6 +799,33 @@ export default function Home() {
                 <p className="text-blue-300 text-sm">2025 NASA Space Apps Challenge</p>
               </div>
             </div>
+            <div className="flex justify-end ml-auto mr-4 gap-4">
+  {hasCheckedWeather && (
+    <>
+      <Button
+        onClick={downloadJSONReport}
+        size="sm"
+        variant="outline"
+        className="border-green-500 text-green-300 hover:bg-green-600"
+        title="Download JSON Report"
+      >
+        <DownloadIcon className="w-4 h-4 mr-1" />
+        JSON
+      </Button>
+      <Button
+        onClick={downloadCSVReport}
+        size="sm"
+        variant="outline"
+        className="border-blue-500 text-blue-300 hover:bg-blue-600"
+        title="Download CSV Report"
+      >
+        <DownloadIcon className="w-4 h-4 mr-1" />
+        CSV
+      </Button>
+    </>
+  )}
+</div>
+
             <div className="flex items-center space-x-4">
               <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
                 <DialogTrigger asChild>
@@ -1337,7 +1483,12 @@ export default function Home() {
                 <Card className="bg-slate-800/50 border-blue-700 backdrop-blur-sm">
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
-                      <span>Weather Forecast</span>
+                      <CardTitle className="flex items-center justify-between">
+  <div className="flex items-center gap-4">
+    <span>Weather Forecast Dashboard</span>
+  </div>
+
+</CardTitle>
                       <Badge variant="outline" className="border-blue-500 text-blue-300">
                         {weatherData.conditions}
                       </Badge>
